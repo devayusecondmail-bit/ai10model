@@ -1,4 +1,5 @@
 import os
+import urllib.request
 import cv2
 import numpy as np
 from PIL import Image
@@ -12,6 +13,9 @@ st.set_page_config(
     page_title="Plant Pathology Diagnostic System",
     layout="wide"
 )
+
+MODEL_PATH = "ai10.pt"
+MODEL_URL = "https://github.com/devayusecondmail-bit/ai10model/releases/download/v1.0/ai10.pt"
 
 # --------------------------------------------------------------------------
 # 2. HELPER FUNCTIONS & MODEL CACHING
@@ -32,19 +36,16 @@ def calculate_box_iou(box1, box2):
 
 
 @st.cache_resource
-def load_yolo_model(model_path="ai10.pt"):
-    """Loads and caches the model in RAM for efficient inference."""
-    if not os.path.exists(model_path):
-        return None
-    return YOLO(model_path)
+def load_yolo_model():
+    """Downloads model from release if missing, then caches it in RAM."""
+    if not os.path.exists(MODEL_PATH):
+        with st.spinner("Downloading model weights..."):
+            urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+    return YOLO(MODEL_PATH)
 
 
 # Load model
-model = load_yolo_model("ai10.pt")
-
-if model is None:
-    st.error("Model file 'ai10.pt' was not found. Ensure 'ai10.pt' is in the root directory.")
-    st.stop()
+model = load_yolo_model()
 
 # Extract crops from model class names
 crop_keywords = [
@@ -112,14 +113,12 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    # Read image
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     orig_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
     orig_rgb = cv2.cvtColor(orig_bgr, cv2.COLOR_BGR2RGB)
     
     is_unrestricted = (selected_option == DEFAULT_ALL_OPTION)
     
-    # Define allowed classes
     if is_unrestricted:
         allowed_class_ids = list(model.names.keys())
         user_specified_crop = "plant"
@@ -152,7 +151,6 @@ if uploaded_file is not None:
             verbose=False
         )
 
-        # Prepare canvas images
         img_raw = orig_rgb.copy()
         img_filtered = orig_rgb.copy()
 
@@ -176,7 +174,6 @@ if uploaded_file is not None:
             font_thickness = 2
             (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
 
-            # Pass 1: Raw Annotations (Blue)
             cv2.rectangle(img_raw, (ux1, uy1), (ux2, uy2), (0, 102, 255), 3)
             cv2.rectangle(img_raw, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (255, 255, 255), -1)
             cv2.rectangle(img_raw, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (0, 102, 255), 2)
@@ -188,7 +185,6 @@ if uploaded_file is not None:
                 "Confidence": f"{u_confidence:.1f}%"
             })
 
-            # Pass 2: Spatial IoU Matching
             best_target_box = None
             best_target_conf = -1.0
 
@@ -202,7 +198,7 @@ if uploaded_file is not None:
                         best_target_conf = t_conf
                         best_target_box = t_box
 
-            box_color = (0, 180, 80)  # Green for verified match
+            box_color = (0, 180, 80)
             status_text = "Verified Match"
 
             if u_class_id in allowed_class_ids:
@@ -217,7 +213,7 @@ if uploaded_file is not None:
                 fallback_crop = user_specified_crop.strip().title()
                 final_label = f"{fallback_crop} Leaf (Unresolved Condition)"
                 final_conf = "N/A"
-                box_color = (230, 130, 0)  # Orange for out-of-domain warning
+                box_color = (230, 130, 0)
                 status_text = "Out of Target Domain"
 
             cv2.rectangle(img_filtered, (ux1, uy1), (ux2, uy2), box_color, 3)
