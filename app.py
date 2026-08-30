@@ -444,21 +444,7 @@ if uploaded_file is not None:
                     st.write(info["cure"])
 
 # --------------------------------------------------------------------------
-# 9. SYSTEM ARCHITECTURE (BOTTOM SECTION)
-# --------------------------------------------------------------------------
-st.divider()
-st.subheader("System Architecture & Working Logic")
-
-st.markdown(
-    """
-    **Two-Pass Detection Mechanism:**
-    1. **Pass 1 (General Scan):** Scans the leaf image without crop restrictions to locate all candidate lesion patterns.
-    2. **Pass 2 (Crop Domain Matching):** Cross-checks detections against the selected crop category using spatial Intersection-over-Union (IoU) overlap to ensure diseases are not falsely attributed across plant species.
-    """
-)
-
-# --------------------------------------------------------------------------
-# 10. DISCLAIMER & CREDITS
+# 9. DISCLAIMER & CREDITS
 # --------------------------------------------------------------------------
 st.divider()
 
