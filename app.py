@@ -482,7 +482,7 @@ footer_html = """
         <li><strong>Krish Mamidala</strong></li>
         <li><strong>Devayu Singh Thakur</strong></li>
     </ul>
-</div>
+    </div>
 """
 
 st.markdown(footer_html, unsafe_allow_html=True)
