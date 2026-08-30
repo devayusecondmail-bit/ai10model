@@ -220,13 +220,12 @@ with st.sidebar:
     )
     
     iou_threshold = st.slider(
-    "IoU (NMS) Overlap Threshold",
-    min_value=0.05,
-    max_value=1.00,
-    value=0.70,
-    step=0.05,
-    help="Higher values allow overlapping neighboring leaves to be detected separately."
-)
+        "IoU (NMS) Overlap Threshold",
+        min_value=0.05,
+        max_value=1.00,
+        value=0.70,
+        step=0.05,
+        help="Higher values allow overlapping neighboring leaves to be detected separately."
     )
 
 # --------------------------------------------------------------------------
@@ -258,15 +257,14 @@ uploaded_file = st.file_uploader(
 )
 
 # --------------------------------------------------------------------------
-# 6. INFERENCE & RESULTS PROCESSING (COLAB-MATCHED)
+# 6. INFERENCE & RESULTS PROCESSING
 # --------------------------------------------------------------------------
 if uploaded_file is not None:
-    # Load image via PIL to match Colab's exact color & dimension handling
     pil_image = Image.open(uploaded_file).convert("RGB")
     orig_rgb = np.array(pil_image)
-
+    
     is_unrestricted = (selected_option == DEFAULT_ALL_OPTION)
-
+    
     if is_unrestricted:
         allowed_class_ids = list(model.names.keys())
         user_specified_crop = "plant"
@@ -278,7 +276,7 @@ if uploaded_file is not None:
         ]
 
     with st.spinner("Analyzing leaf condition..."):
-        # Pass 1: Raw Detection (Matching Colab defaults)
+        # Pass 1: Raw Detection
         results_unconstrained = model.predict(
             source=pil_image,
             conf=conf_threshold,
@@ -341,7 +339,7 @@ if uploaded_file is not None:
                 t_xyxy = t_box.xyxy[0].cpu().numpy().astype(int)
                 iou = calculate_box_iou(u_xyxy, t_xyxy)
 
-                if iou > 0.10:  # Allow spatial overlap linking
+                if iou > 0.10:
                     t_conf = float(t_box.conf[0])
                     if t_conf > best_target_conf:
                         best_target_conf = t_conf
@@ -380,7 +378,7 @@ if uploaded_file is not None:
             })
 
             leaf_idx += 1
-    
+
     # --------------------------------------------------------------------------
     # 7. VISUAL & TABULAR RESULTS
     # --------------------------------------------------------------------------
