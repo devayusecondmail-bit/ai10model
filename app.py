@@ -310,20 +310,34 @@ if uploaded_file is not None:
             u_xyxy = box.xyxy[0].cpu().numpy().astype(int)
             ux1, uy1, ux2, uy2 = u_xyxy
 
+            # Leaf centroid for center pin
+            cx = (ux1 + ux2) // 2
+            cy = (uy1 + uy2) // 2
+
             u_class_id = int(box.cls[0])
             u_confidence = float(box.conf[0]) * 100
             u_raw_label = model.names[u_class_id].replace("___", " ").replace("_", " ")
 
             badge_text = str(leaf_idx)
-            font_scale = max(0.6, min(1.0, (ux2 - ux1) / 300))
+            font_scale = 0.8
             font_thickness = 2
             (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
+            pin_radius = max(tw, th) // 2 + 10
 
-            # Pass 1 Visuals (Blue)
-            cv2.rectangle(img_raw, (ux1, uy1), (ux2, uy2), (0, 102, 255), 3)
-            cv2.rectangle(img_raw, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (255, 255, 255), -1)
-            cv2.rectangle(img_raw, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (0, 102, 255), 2)
-            cv2.putText(img_raw, badge_text, (ux1 + 6, uy1 + th + 4), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA)
+            # Pass 1 Visuals (Blue Box + Center Pin)
+            cv2.rectangle(img_raw, (ux1, uy1), (ux2, uy2), (0, 102, 255), 2)
+            cv2.circle(img_raw, (cx, cy), pin_radius, (255, 255, 255), -1)
+            cv2.circle(img_raw, (cx, cy), pin_radius, (0, 102, 255), 2)
+            cv2.putText(
+                img_raw,
+                badge_text,
+                (cx - tw // 2, cy + th // 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (0, 0, 0),
+                font_thickness,
+                cv2.LINE_AA
+            )
 
             raw_summary.append({
                 "Index": leaf_idx,
@@ -365,10 +379,20 @@ if uploaded_file is not None:
                 box_color = (230, 130, 0)
                 status_text = "Out of Target Domain"
 
-            cv2.rectangle(img_filtered, (ux1, uy1), (ux2, uy2), box_color, 3)
-            cv2.rectangle(img_filtered, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (255, 255, 255), -1)
-            cv2.rectangle(img_filtered, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), box_color, 2)
-            cv2.putText(img_filtered, badge_text, (ux1 + 6, uy1 + th + 4), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA)
+            # Pass 2 Visuals (Domain-colored Box + Center Pin)
+            cv2.rectangle(img_filtered, (ux1, uy1), (ux2, uy2), box_color, 2)
+            cv2.circle(img_filtered, (cx, cy), pin_radius, (255, 255, 255), -1)
+            cv2.circle(img_filtered, (cx, cy), pin_radius, box_color, 2)
+            cv2.putText(
+                img_filtered,
+                badge_text,
+                (cx - tw // 2, cy + th // 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (0, 0, 0),
+                font_thickness,
+                cv2.LINE_AA
+            )
 
             filtered_summary.append({
                 "Index": leaf_idx,
