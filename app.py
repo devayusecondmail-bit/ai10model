@@ -220,12 +220,13 @@ with st.sidebar:
     )
     
     iou_threshold = st.slider(
-        "IoU (NMS) Overlap Threshold",
-        min_value=0.05,
-        max_value=1.00,
-        value=0.30,
-        step=0.05,
-        help="Controls grouping of overlapping duplicate boxes."
+    "IoU (NMS) Overlap Threshold",
+    min_value=0.05,
+    max_value=1.00,
+    value=0.70,
+    step=0.05,
+    help="Higher values allow overlapping neighboring leaves to be detected separately."
+)
     )
 
 # --------------------------------------------------------------------------
@@ -257,15 +258,15 @@ uploaded_file = st.file_uploader(
 )
 
 # --------------------------------------------------------------------------
-# 6. INFERENCE & RESULTS PROCESSING
+# 6. INFERENCE & RESULTS PROCESSING (COLAB-MATCHED)
 # --------------------------------------------------------------------------
 if uploaded_file is not None:
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    orig_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    orig_rgb = cv2.cvtColor(orig_bgr, cv2.COLOR_BGR2RGB)
-    
+    # Load image via PIL to match Colab's exact color & dimension handling
+    pil_image = Image.open(uploaded_file).convert("RGB")
+    orig_rgb = np.array(pil_image)
+
     is_unrestricted = (selected_option == DEFAULT_ALL_OPTION)
-    
+
     if is_unrestricted:
         allowed_class_ids = list(model.names.keys())
         user_specified_crop = "plant"
@@ -277,23 +278,21 @@ if uploaded_file is not None:
         ]
 
     with st.spinner("Analyzing leaf condition..."):
-        # Pass 1: Raw Unconstrained Inference
+        # Pass 1: Raw Detection (Matching Colab defaults)
         results_unconstrained = model.predict(
-            source=orig_rgb,
+            source=pil_image,
             conf=conf_threshold,
             iou=iou_threshold,
-            agnostic_nms=True,
             save=False,
             verbose=False
         )
 
-        # Pass 2: Targeted Inference
+        # Pass 2: Targeted Matching
         results_targeted = model.predict(
-            source=orig_rgb,
+            source=pil_image,
             classes=allowed_class_ids,
             conf=0.001,
             iou=iou_threshold,
-            agnostic_nms=True,
             save=False,
             verbose=False
         )
@@ -322,7 +321,7 @@ if uploaded_file is not None:
             font_thickness = 2
             (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
 
-            # Pass 1 Drawing (Blue)
+            # Pass 1 Visuals (Blue)
             cv2.rectangle(img_raw, (ux1, uy1), (ux2, uy2), (0, 102, 255), 3)
             cv2.rectangle(img_raw, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (255, 255, 255), -1)
             cv2.rectangle(img_raw, (ux1, uy1), (ux1 + tw + 12, uy1 + th + 12), (0, 102, 255), 2)
@@ -342,7 +341,7 @@ if uploaded_file is not None:
                 t_xyxy = t_box.xyxy[0].cpu().numpy().astype(int)
                 iou = calculate_box_iou(u_xyxy, t_xyxy)
 
-                if iou > iou_threshold:
+                if iou > 0.10:  # Allow spatial overlap linking
                     t_conf = float(t_box.conf[0])
                     if t_conf > best_target_conf:
                         best_target_conf = t_conf
@@ -381,7 +380,7 @@ if uploaded_file is not None:
             })
 
             leaf_idx += 1
-
+    
     # --------------------------------------------------------------------------
     # 7. VISUAL & TABULAR RESULTS
     # --------------------------------------------------------------------------
