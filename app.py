@@ -157,7 +157,7 @@ def lookup_disease_advisory(label_text):
     return DEFAULT_FALLBACK_ADVISORY
 
 # --------------------------------------------------------------------------
-# 3. HELPER FUNCTIONS & MODEL CACHING
+# 3. HELPER FUNCTIONS & ANNOTATION DRAWING
 # --------------------------------------------------------------------------
 def calculate_box_iou(box1, box2):
     """Calculates Intersection over Union (IoU) between two bounding boxes."""
@@ -172,6 +172,52 @@ def calculate_box_iou(box1, box2):
     union_area = box1_area + box2_area - intersection_area
 
     return intersection_area / union_area if union_area > 0 else 0
+
+
+def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
+    """Draws either a bounding box or an arrow callout on the target leaf."""
+    x1, y1, x2, y2 = box_coords
+    img_h, img_w, _ = img.shape
+    badge_text = str(leaf_idx)
+    font_scale = 0.75
+    font_thickness = 2
+    (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
+    badge_r = max(tw, th) // 2 + 8
+
+    cx = (x1 + x2) // 2
+    cy = (y1 + y2) // 2
+
+    if mode == "Bounding Boxes":
+        # Draw full bounding box
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+        # Top-left badge
+        cv2.rectangle(img, (x1, y1), (x1 + tw + 12, y1 + th + 12), (255, 255, 255), -1)
+        cv2.rectangle(img, (x1, y1), (x1 + tw + 12, y1 + th + 12), color, 2)
+        cv2.putText(
+            img, badge_text, (x1 + 6, y1 + th + 4),
+            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA
+        )
+    else:
+        # Arrow Callout Mode: compute offset anchor badge position
+        offset_x = -45 if cx > 60 else 45
+        offset_y = -45 if cy > 60 else 45
+        bx = max(badge_r + 5, min(img_w - badge_r - 5, cx + offset_x))
+        by = max(badge_r + 5, min(img_h - badge_r - 5, cy + offset_y))
+
+        # Target center focal dot
+        cv2.circle(img, (cx, cy), 5, color, -1)
+        cv2.circle(img, (cx, cy), 7, (255, 255, 255), 1)
+
+        # Directional arrow from badge boundary to target leaf center
+        cv2.arrowedLine(img, (bx, by), (cx, cy), color, 2, tipLength=0.25)
+
+        # Numbered circle badge at the arrow tail
+        cv2.circle(img, (bx, by), badge_r, (255, 255, 255), -1)
+        cv2.circle(img, (bx, by), badge_r, color, 2)
+        cv2.putText(
+            img, badge_text, (bx - tw // 2, by + th // 2),
+            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA
+        )
 
 
 @st.cache_resource
@@ -204,11 +250,20 @@ DEFAULT_ALL_OPTION = "All Crops (General Diagnostic / Unrestricted)"
 dropdown_options = [DEFAULT_ALL_OPTION] + sorted(list(available_crops))
 
 # --------------------------------------------------------------------------
-# 4. SIDEBAR (ADVANCED SETTINGS ONLY)
+# 4. SIDEBAR (CONTROLS & VISUAL MODE SWITCH)
 # --------------------------------------------------------------------------
 with st.sidebar:
-    st.header("Advanced Settings")
-    st.caption("Fine-tune AI sensitivity and box overlap parameters.")
+    st.header("Display & Hyperparameters")
+    
+    view_mode = st.radio(
+        "Leaf Annotation Style",
+        options=["Pointing Arrows", "Bounding Boxes"],
+        index=0,
+        help="Pointing arrows leave leaf symptoms clear; bounding boxes outline the full detected region."
+    )
+    
+    st.divider()
+    st.subheader("Inference Settings")
     
     conf_threshold = st.slider(
         "Confidence Threshold",
@@ -308,36 +363,12 @@ if uploaded_file is not None:
 
         for box in unconstrained_boxes:
             u_xyxy = box.xyxy[0].cpu().numpy().astype(int)
-            ux1, uy1, ux2, uy2 = u_xyxy
-
-            # Leaf centroid for center pin
-            cx = (ux1 + ux2) // 2
-            cy = (uy1 + uy2) // 2
-
             u_class_id = int(box.cls[0])
             u_confidence = float(box.conf[0]) * 100
             u_raw_label = model.names[u_class_id].replace("___", " ").replace("_", " ")
 
-            badge_text = str(leaf_idx)
-            font_scale = 0.8
-            font_thickness = 2
-            (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
-            pin_radius = max(tw, th) // 2 + 10
-
-            # Pass 1 Visuals (Blue Box + Center Pin)
-            cv2.rectangle(img_raw, (ux1, uy1), (ux2, uy2), (0, 102, 255), 2)
-            cv2.circle(img_raw, (cx, cy), pin_radius, (255, 255, 255), -1)
-            cv2.circle(img_raw, (cx, cy), pin_radius, (0, 102, 255), 2)
-            cv2.putText(
-                img_raw,
-                badge_text,
-                (cx - tw // 2, cy + th // 2),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale,
-                (0, 0, 0),
-                font_thickness,
-                cv2.LINE_AA
-            )
+            # Pass 1 Annotation (Blue)
+            render_leaf_annotation(img_raw, u_xyxy, leaf_idx, view_mode, (0, 102, 255))
 
             raw_summary.append({
                 "Index": leaf_idx,
@@ -379,20 +410,8 @@ if uploaded_file is not None:
                 box_color = (230, 130, 0)
                 status_text = "Out of Target Domain"
 
-            # Pass 2 Visuals (Domain-colored Box + Center Pin)
-            cv2.rectangle(img_filtered, (ux1, uy1), (ux2, uy2), box_color, 2)
-            cv2.circle(img_filtered, (cx, cy), pin_radius, (255, 255, 255), -1)
-            cv2.circle(img_filtered, (cx, cy), pin_radius, box_color, 2)
-            cv2.putText(
-                img_filtered,
-                badge_text,
-                (cx - tw // 2, cy + th // 2),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale,
-                (0, 0, 0),
-                font_thickness,
-                cv2.LINE_AA
-            )
+            # Pass 2 Annotation
+            render_leaf_annotation(img_filtered, u_xyxy, leaf_idx, view_mode, box_color)
 
             filtered_summary.append({
                 "Index": leaf_idx,
@@ -407,7 +426,7 @@ if uploaded_file is not None:
     # 7. VISUAL & TABULAR RESULTS
     # --------------------------------------------------------------------------
     st.divider()
-    st.subheader("Diagnostic Visualizations")
+    st.subheader(f"Diagnostic Visualizations ({view_mode})")
     
     col1, col2 = st.columns(2)
     with col1:
