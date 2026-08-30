@@ -449,40 +449,20 @@ if uploaded_file is not None:
 st.divider()
 
 footer_html = """
-<div style="
-    background-color: #111827;
-    color: #e5e7eb;
-    padding: 28px 32px;
-    border-radius: 12px;
-    margin-top: 20px;
-    border: 1px solid #374151;
-    font-family: inherit;
-">
-    <div style="
-        background-color: #1f2937;
-        border-left: 4px solid #f59e0b;
-        padding: 16px 20px;
-        border-radius: 6px;
-        margin-bottom: 24px;
-        color: #d1d5db;
-        font-size: 0.95rem;
-        line-height: 1.5;
-    ">
-        <strong style="color: #f59e0b; font-size: 1rem;">Agronomic Disclaimer:</strong><br>
-        This AI diagnostic system is designed strictly for research, educational, and assistive decision-support purposes.
-        While the model utilizes advanced vision pipelines, environmental factors, lighting, and co-infections can influence accuracy.
-        Recommendations should be cross-referenced with regional agricultural extension services or certified crop agronomists before administering chemical treatments.
-    </div>
-
-    <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 1.25rem;">Project Credits</h3>
-    <p style="color: #9ca3af; margin-bottom: 12px; font-size: 0.95rem;">Developed by Class 12 students of DPS East:</p>
-    <ul style="color: #f3f4f6; line-height: 1.8; font-size: 1rem; margin: 0; padding-left: 20px;">
-        <li><strong>Atharva Kumar</strong></li>
-        <li><strong>Anshuman Samal</strong></li>
-        <li><strong>Krish Mamidala</strong></li>
-        <li><strong>Devayu Singh Thakur</strong></li>
-    </ul>
-    </div>
+<div style="background-color: #111827; color: #e5e7eb; padding: 28px 32px; border-radius: 12px; margin-top: 20px; border: 1px solid #374151; font-family: inherit;">
+<div style="background-color: #1f2937; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 6px; margin-bottom: 24px; color: #d1d5db; font-size: 0.95rem; line-height: 1.5;">
+<strong style="color: #f59e0b; font-size: 1rem;">Agronomic Disclaimer:</strong><br>
+This AI diagnostic system is designed strictly for research, educational, and assistive decision-support purposes. While the model utilizes advanced vision pipelines, environmental factors, lighting, and co-infections can influence accuracy. Recommendations should be cross-referenced with regional agricultural extension services or certified crop agronomists before administering chemical treatments.
+</div>
+<h3 style="color: #ffffff; margin-bottom: 12px; font-size: 1.25rem;">Project Credits</h3>
+<p style="color: #9ca3af; margin-bottom: 12px; font-size: 0.95rem;">Developed by Class 12 students of DPS East:</p>
+<ul style="color: #f3f4f6; line-height: 1.8; font-size: 1rem; margin: 0; padding-left: 20px;">
+<li><strong>Atharva Kumar</strong></li>
+<li><strong>Anshuman Samal</strong></li>
+<li><strong>Krish Mamidala</strong></li>
+<li><strong>Devayu Singh Thakur</strong></li>
+</ul>
+</div>
 """
 
 st.markdown(footer_html, unsafe_allow_html=True)
