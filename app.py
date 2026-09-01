@@ -46,7 +46,7 @@ DISEASE_DIRECTORY = {
         "cure": "Apply foliar fungicides (such as strobilurins or triazoles) before silking if you notice spots moving upward onto the middle leaves."
     },
     "corn leaf blight": {
-        "title": "Corn Leaf Blight (Northern Corn Leaf Blight)",
+        "title": "Northern Corn Leaf Blight",
         "identify": "Look for large, long, cigar-shaped grayish-green or tan lesions (1 to 6 inches long) that spread freely across the leaf veins.",
         "prevent": "Plant resistant hybrids, rotate fields away from corn, and plow under leftover crop residue after harvest.",
         "cure": "Spray fungicides (such as azoxystrobin or propiconazole) during early vegetative stages if lesions begin appearing before pollination."
@@ -188,9 +188,7 @@ def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
     cy = (y1 + y2) // 2
 
     if mode == "Bounding Boxes":
-        # Draw full bounding box
         cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-        # Top-left badge
         cv2.rectangle(img, (x1, y1), (x1 + tw + 12, y1 + th + 12), (255, 255, 255), -1)
         cv2.rectangle(img, (x1, y1), (x1 + tw + 12, y1 + th + 12), color, 2)
         cv2.putText(
@@ -198,20 +196,14 @@ def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
             cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA
         )
     else:
-        # Arrow Callout Mode: compute offset anchor badge position
         offset_x = -45 if cx > 60 else 45
         offset_y = -45 if cy > 60 else 45
         bx = max(badge_r + 5, min(img_w - badge_r - 5, cx + offset_x))
         by = max(badge_r + 5, min(img_h - badge_r - 5, cy + offset_y))
 
-        # Target center focal dot
         cv2.circle(img, (cx, cy), 5, color, -1)
         cv2.circle(img, (cx, cy), 7, (255, 255, 255), 1)
-
-        # Directional arrow from badge boundary to target leaf center
         cv2.arrowedLine(img, (bx, by), (cx, cy), color, 2, tipLength=0.25)
-
-        # Numbered circle badge at the arrow tail
         cv2.circle(img, (bx, by), badge_r, (255, 255, 255), -1)
         cv2.circle(img, (bx, by), badge_r, color, 2)
         cv2.putText(
@@ -484,24 +476,16 @@ if uploaded_file is not None:
                     st.write(info["cure"])
 
 # --------------------------------------------------------------------------
-# 9. DISCLAIMER & CREDITS (DARK LOWER SECTION)
+# 9. AGRONOMIC DISCLAIMER (DARK LOWER SECTION)
 # --------------------------------------------------------------------------
 st.divider()
 
 footer_html = """
-<div style="background-color: #111827; color: #e5e7eb; padding: 28px 32px; border-radius: 12px; margin-top: 20px; border: 1px solid #374151; font-family: inherit;">
-<div style="background-color: #1f2937; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 6px; margin-bottom: 24px; color: #d1d5db; font-size: 0.95rem; line-height: 1.5;">
+<div style="background-color: #111827; color: #e5e7eb; padding: 24px 28px; border-radius: 12px; margin-top: 20px; border: 1px solid #374151; font-family: inherit;">
+<div style="background-color: #1f2937; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 6px; color: #d1d5db; font-size: 0.95rem; line-height: 1.5;">
 <strong style="color: #f59e0b; font-size: 1rem;">Agronomic Disclaimer:</strong><br>
 This AI diagnostic system is designed strictly for research, educational, and assistive decision-support purposes. While the model utilizes advanced vision pipelines, environmental factors, lighting, and co-infections can influence accuracy. Recommendations should be cross-referenced with regional agricultural extension services or certified crop agronomists before administering chemical treatments.
 </div>
-<h3 style="color: #ffffff; margin-bottom: 12px; font-size: 1.25rem;">Project Credits</h3>
-<p style="color: #9ca3af; margin-bottom: 12px; font-size: 0.95rem;">Developed by Class 12 students of DPS East:</p>
-<ul style="color: #f3f4f6; line-height: 1.8; font-size: 1rem; margin: 0; padding-left: 20px;">
-<li><strong>Atharva Kumar</strong></li>
-<li><strong>Anshuman Samal</strong></li>
-<li><strong>Krish Mamidala</strong></li>
-<li><strong>Devayu Singh Thakur</strong></li>
-</ul>
 </div>
 """
 
