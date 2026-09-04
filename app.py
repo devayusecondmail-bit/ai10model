@@ -377,18 +377,26 @@ if uploaded_file is not None:
         unconstrained_boxes = results_unconstrained[0].boxes
         targeted_boxes = results_targeted[0].boxes
 
-        # Check for domain mismatch
+        # Check for domain mismatch across all Pass 1 detections
         mismatch_detected = False
         mismatched_crop_name = ""
+
         if not is_unrestricted and len(unconstrained_boxes) > 0:
-            top_box = unconstrained_boxes[0]
-            top_class_name = model.names[int(top_box.cls[0])].lower()
-            for kw in crop_keywords:
-                clean_kw = kw.replace("_", " ")
-                if clean_kw in top_class_name and clean_kw != user_specified_crop:
-                    mismatch_detected = True
-                    mismatched_crop_name = clean_kw.title()
-                    break
+            pass1_crops = set()
+            for b in unconstrained_boxes:
+                c_name = model.names[int(b.cls[0])].lower().replace("___", " ").replace("_", " ")
+                for kw in crop_keywords:
+                    clean_kw = kw.replace("_", " ")
+                    if clean_kw in c_name:
+                        pass1_crops.add(clean_kw.title())
+
+            selected_clean = user_specified_crop.replace("_", " ").title()
+            other_crops = [c for c in pass1_crops if c != selected_clean]
+
+            # Trigger warning if another crop was identified and (selected crop is absent OR Pass 2 found 0 leaves)
+            if other_crops and (selected_clean not in pass1_crops or len(targeted_boxes) == 0):
+                mismatch_detected = True
+                mismatched_crop_name = ", ".join(sorted(other_crops))
 
         # Pass 1 Summary
         raw_summary = []
@@ -428,9 +436,12 @@ if uploaded_file is not None:
     st.divider()
 
     if mismatch_detected:
+        match_count = len(filtered_summary)
+        suffix = "s" if match_count != 1 else ""
         st.warning(
-            f"⚠️ **Possible Crop Mismatch:** The unrestricted AI scan identified symptoms matching **{mismatched_crop_name} foliage**, "
-            f"but diagnosis is strictly restricted to **{selected_option}**. Please verify your crop selection if results seem unexpected."
+            f"⚠️ **Possible Crop Mismatch:** The open AI scan identified symptoms characteristic of **{mismatched_crop_name} foliage**, "
+            f"while diagnosis is strictly restricted to **{selected_option}** (which returned {match_count} match{suffix}). "
+            f"Please verify your crop selection in Step 1 if these results look unexpected."
         )
 
     st.subheader(f"Diagnostic Visualizations ({view_mode})")
