@@ -159,27 +159,11 @@ def lookup_disease_advisory(label_text):
 # --------------------------------------------------------------------------
 # 3. HELPER FUNCTIONS & ANNOTATION DRAWING
 # --------------------------------------------------------------------------
-def calculate_box_iou(box1, box2):
-    """Calculates Intersection over Union (IoU) between two bounding boxes."""
-    x1 = max(box1[0], box2[0])
-    y1 = max(box1[1], box2[1])
-    x2 = min(box1[2], box2[2])
-    y2 = min(box1[3], box2[3])
-
-    intersection_area = max(0, x2 - x1) * max(0, y2 - y1)
-    box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
-    box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
-    union_area = box1_area + box2_area - intersection_area
-
-    return intersection_area / union_area if union_area > 0 else 0
-
-
 def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
     """Draws resolution-scaled bounding boxes or arrow callouts."""
     x1, y1, x2, y2 = box_coords
     img_h, img_w, _ = img.shape
 
-    # Dynamic scaling multiplier relative to a 1000px display baseline
     scale = max(1.0, max(img_h, img_w) / 1000.0)
 
     font_scale = 0.85 * scale
@@ -195,9 +179,7 @@ def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
     cy = (y1 + y2) // 2
 
     if mode == "Bounding Boxes":
-        # Draw scaled bounding box
         cv2.rectangle(img, (x1, y1), (x2, y2), color, line_thickness)
-        # Scaled badge at top-left
         badge_w = tw + (pad * 2)
         badge_h = th + (pad * 2)
         cv2.rectangle(img, (x1, y1), (x1 + badge_w, y1 + badge_h), (255, 255, 255), -1)
@@ -207,21 +189,15 @@ def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
             cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA
         )
     else:
-        # Arrow Callout Mode with scaled offsets and focal dots
         offset_dist = int(55 * scale)
         offset_x = -offset_dist if cx > offset_dist + badge_r else offset_dist
         offset_y = -offset_dist if cy > offset_dist + badge_r else offset_dist
         bx = max(badge_r + 5, min(img_w - badge_r - 5, cx + offset_x))
         by = max(badge_r + 5, min(img_h - badge_r - 5, cy + offset_y))
 
-        # Target center focal circle
         cv2.circle(img, (cx, cy), max(4, int(5 * scale)), color, -1)
         cv2.circle(img, (cx, cy), max(6, int(7 * scale)), (255, 255, 255), max(1, int(1.5 * scale)))
-
-        # Arrow callout
         cv2.arrowedLine(img, (bx, by), (cx, cy), color, line_thickness, tipLength=0.25)
-
-        # Scaled circular badge at arrow tail
         cv2.circle(img, (bx, by), badge_r, (255, 255, 255), -1)
         cv2.circle(img, (bx, by), badge_r, color, line_thickness)
         cv2.putText(
@@ -331,7 +307,7 @@ if uploaded_file is not None:
     is_unrestricted = (selected_option == DEFAULT_ALL_OPTION)
     
     if is_unrestricted:
-        allowed_class_ids = list(model.names.keys())
+        allowed_class_ids = None
         user_specified_crop = "plant"
     else:
         user_specified_crop = selected_option.lower()
@@ -341,7 +317,7 @@ if uploaded_file is not None:
         ]
 
     with st.spinner("Analyzing leaf condition..."):
-        # Pass 1: Raw Detection with Class-Agnostic NMS enabled
+        # Pass 1: Unbiased, Unrestricted Guess Across All Crops
         results_unconstrained = model.predict(
             source=pil_image,
             conf=conf_threshold,
@@ -351,11 +327,11 @@ if uploaded_file is not None:
             verbose=False
         )
 
-        # Pass 2: Targeted Matching with Class-Agnostic NMS enabled
+        # Pass 2: Direct Crop-Restricted Prediction
         results_targeted = model.predict(
             source=pil_image,
             classes=allowed_class_ids,
-            conf=0.001,
+            conf=conf_threshold,
             iou=iou_threshold,
             agnostic_nms=True,
             save=False,
@@ -368,88 +344,74 @@ if uploaded_file is not None:
         unconstrained_boxes = results_unconstrained[0].boxes
         targeted_boxes = results_targeted[0].boxes
 
-        raw_summary = []
-        filtered_summary = []
-        detected_conditions = set()
-        leaf_idx = 1
+        # Check for domain mismatch between Pass 1 and selected crop
+        mismatch_detected = False
+        mismatched_crop_name = ""
+        if not is_unrestricted and len(unconstrained_boxes) > 0:
+            top_box = unconstrained_boxes[0]
+            top_class_name = model.names[int(top_box.cls[0])].lower()
+            for kw in crop_keywords:
+                clean_kw = kw.replace("_", " ")
+                if clean_kw in top_class_name and clean_kw != user_specified_crop:
+                    mismatch_detected = True
+                    mismatched_crop_name = clean_kw.title()
+                    break
 
-        for box in unconstrained_boxes:
+        # Process Pass 1 Detections
+        raw_summary = []
+        for idx, box in enumerate(unconstrained_boxes, start=1):
             u_xyxy = box.xyxy[0].cpu().numpy().astype(int)
             u_class_id = int(box.cls[0])
             u_confidence = float(box.conf[0]) * 100
             u_raw_label = model.names[u_class_id].replace("___", " ").replace("_", " ")
 
-            # Pass 1 Annotation (Blue)
-            render_leaf_annotation(img_raw, u_xyxy, leaf_idx, view_mode, (0, 102, 255))
-
+            render_leaf_annotation(img_raw, u_xyxy, idx, view_mode, (0, 102, 255))
             raw_summary.append({
-                "Index": leaf_idx,
-                "Identified Label": u_raw_label.title(),
+                "Leaf #": idx,
+                "Identified Condition": u_raw_label.title(),
                 "Confidence": f"{u_confidence:.1f}%"
             })
 
-            # Pass 2 Spatial Matching
-            best_target_box = None
-            best_target_conf = -1.0
+        # Process Pass 2 Detections (Direct Target Crop Prediction)
+        filtered_summary = []
+        detected_conditions = set()
+        for idx, box in enumerate(targeted_boxes, start=1):
+            t_xyxy = box.xyxy[0].cpu().numpy().astype(int)
+            t_class_id = int(box.cls[0])
+            t_confidence = float(box.conf[0]) * 100
+            t_label = model.names[t_class_id].replace("___", " ").replace("_", " ").title()
 
-            for t_box in targeted_boxes:
-                t_xyxy = t_box.xyxy[0].cpu().numpy().astype(int)
-                iou = calculate_box_iou(u_xyxy, t_xyxy)
-
-                if iou > 0.10:
-                    t_conf = float(t_box.conf[0])
-                    if t_conf > best_target_conf:
-                        best_target_conf = t_conf
-                        best_target_box = t_box
-
-            box_color = (0, 180, 80)
-            status_text = "Verified Match"
-
-            if u_class_id in allowed_class_ids:
-                final_label = u_raw_label.title()
-                final_conf = f"{u_confidence:.1f}%"
-                detected_conditions.add(final_label)
-            elif best_target_box is not None:
-                t_class_id = int(best_target_box.cls[0])
-                final_label = model.names[t_class_id].replace("___", " ").replace("_", " ").title()
-                final_conf = f"{(best_target_conf * 100):.1f}%"
-                status_text = f"Corrected from {u_raw_label.title()}"
-                detected_conditions.add(final_label)
-            else:
-                fallback_crop = user_specified_crop.strip().title()
-                final_label = f"{fallback_crop} Leaf (Unresolved Condition)"
-                final_conf = "N/A"
-                box_color = (230, 130, 0)
-                status_text = "Out of Target Domain"
-
-            # Pass 2 Annotation
-            render_leaf_annotation(img_filtered, u_xyxy, leaf_idx, view_mode, box_color)
-
+            detected_conditions.add(t_label)
+            render_leaf_annotation(img_filtered, t_xyxy, idx, view_mode, (0, 180, 80))
             filtered_summary.append({
-                "Index": leaf_idx,
-                "Final Diagnostic": final_label,
-                "Confidence": final_conf,
-                "Status": status_text
+                "Leaf #": idx,
+                "Diagnostic Label": t_label,
+                "Confidence": f"{t_confidence:.1f}%"
             })
-
-            leaf_idx += 1
 
     # --------------------------------------------------------------------------
     # 7. VISUAL & TABULAR RESULTS
     # --------------------------------------------------------------------------
     st.divider()
+
+    if mismatch_detected:
+        st.warning(
+            f"⚠️ **Possible Crop Mismatch:** The unrestricted AI scan identified symptoms matching **{mismatched_crop_name} foliage**, "
+            f"but diagnosis is strictly restricted to **{selected_option}**. Please verify your crop selection if results seem unexpected."
+        )
+
     st.subheader(f"Diagnostic Visualizations ({view_mode})")
     
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**Pass 1: Raw Unconstrained Detections**")
+        st.markdown("**Pass 1: Unbiased AI Scan (All Crops)**")
         st.image(img_raw, use_container_width=True)
 
     with col2:
         right_title = (
-            "**Pass 2: Unrestricted Output**"
+            "**Pass 2: General Diagnosis Output**"
             if is_unrestricted
-            else f"**Pass 2: Domain-Restricted ({selected_option})**"
+            else f"**Pass 2: Direct Restricted Diagnosis ({selected_option})**"
         )
         st.markdown(right_title)
         st.image(img_filtered, use_container_width=True)
@@ -457,27 +419,29 @@ if uploaded_file is not None:
     st.markdown("### Diagnostic Summary Table")
     rep_col1, rep_col2 = st.columns(2)
     with rep_col1:
-        st.markdown("**Pass 1 Detections**")
+        st.markdown("**Unbiased AI Scan Findings**")
         if raw_summary:
             st.dataframe(raw_summary, use_container_width=True)
         else:
             st.info("No leaf structures detected above the confidence threshold.")
 
     with rep_col2:
-        st.markdown("**Pass 2 Verified Diagnosis**")
+        st.markdown(f"**Targeted Diagnosis ({'All Crops' if is_unrestricted else selected_option})**")
         if filtered_summary:
             st.dataframe(filtered_summary, use_container_width=True)
         else:
-            st.info("No leaf structures verified within diagnostic criteria.")
+            st.info(f"No specific lesions detected within the {selected_option} domain.")
 
     # --------------------------------------------------------------------------
     # 8. PATHOLOGY ADVISORY (IDENTIFY, PREVENT, CURE)
     # --------------------------------------------------------------------------
-    if detected_conditions:
+    advisory_targets = detected_conditions if detected_conditions else {r["Identified Condition"] for r in raw_summary}
+
+    if advisory_targets:
         st.divider()
         st.subheader("Pathology Advisory & Remediation Directives")
         
-        for condition in sorted(list(detected_conditions)):
+        for condition in sorted(list(advisory_targets)):
             info = lookup_disease_advisory(condition)
             
             with st.expander(f"Treatment Profile: {info['title']}", expanded=True):
