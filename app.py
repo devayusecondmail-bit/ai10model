@@ -175,37 +175,55 @@ def calculate_box_iou(box1, box2):
 
 
 def render_leaf_annotation(img, box_coords, leaf_idx, mode, color):
-    """Draws either a bounding box or an arrow callout on the target leaf."""
+    """Draws resolution-scaled bounding boxes or arrow callouts."""
     x1, y1, x2, y2 = box_coords
     img_h, img_w, _ = img.shape
+
+    # Dynamic scaling multiplier relative to a 1000px display baseline
+    scale = max(1.0, max(img_h, img_w) / 1000.0)
+
+    font_scale = 0.85 * scale
+    font_thickness = max(2, int(2.2 * scale))
+    line_thickness = max(2, int(2.5 * scale))
+    pad = int(8 * scale)
+
     badge_text = str(leaf_idx)
-    font_scale = 0.75
-    font_thickness = 2
     (tw, th), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
-    badge_r = max(tw, th) // 2 + 8
+    badge_r = max(tw, th) // 2 + pad
 
     cx = (x1 + x2) // 2
     cy = (y1 + y2) // 2
 
     if mode == "Bounding Boxes":
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-        cv2.rectangle(img, (x1, y1), (x1 + tw + 12, y1 + th + 12), (255, 255, 255), -1)
-        cv2.rectangle(img, (x1, y1), (x1 + tw + 12, y1 + th + 12), color, 2)
+        # Draw scaled bounding box
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, line_thickness)
+        # Scaled badge at top-left
+        badge_w = tw + (pad * 2)
+        badge_h = th + (pad * 2)
+        cv2.rectangle(img, (x1, y1), (x1 + badge_w, y1 + badge_h), (255, 255, 255), -1)
+        cv2.rectangle(img, (x1, y1), (x1 + badge_w, y1 + badge_h), color, line_thickness)
         cv2.putText(
-            img, badge_text, (x1 + 6, y1 + th + 4),
+            img, badge_text, (x1 + pad, y1 + th + pad - int(2 * scale)),
             cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA
         )
     else:
-        offset_x = -45 if cx > 60 else 45
-        offset_y = -45 if cy > 60 else 45
+        # Arrow Callout Mode with scaled offsets and focal dots
+        offset_dist = int(55 * scale)
+        offset_x = -offset_dist if cx > offset_dist + badge_r else offset_dist
+        offset_y = -offset_dist if cy > offset_dist + badge_r else offset_dist
         bx = max(badge_r + 5, min(img_w - badge_r - 5, cx + offset_x))
         by = max(badge_r + 5, min(img_h - badge_r - 5, cy + offset_y))
 
-        cv2.circle(img, (cx, cy), 5, color, -1)
-        cv2.circle(img, (cx, cy), 7, (255, 255, 255), 1)
-        cv2.arrowedLine(img, (bx, by), (cx, cy), color, 2, tipLength=0.25)
+        # Target center focal circle
+        cv2.circle(img, (cx, cy), max(4, int(5 * scale)), color, -1)
+        cv2.circle(img, (cx, cy), max(6, int(7 * scale)), (255, 255, 255), max(1, int(1.5 * scale)))
+
+        # Arrow callout
+        cv2.arrowedLine(img, (bx, by), (cx, cy), color, line_thickness, tipLength=0.25)
+
+        # Scaled circular badge at arrow tail
         cv2.circle(img, (bx, by), badge_r, (255, 255, 255), -1)
-        cv2.circle(img, (bx, by), badge_r, color, 2)
+        cv2.circle(img, (bx, by), badge_r, color, line_thickness)
         cv2.putText(
             img, badge_text, (bx - tw // 2, by + th // 2),
             cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA
@@ -242,7 +260,7 @@ DEFAULT_ALL_OPTION = "All Crops (General Diagnostic / Unrestricted)"
 dropdown_options = [DEFAULT_ALL_OPTION] + sorted(list(available_crops))
 
 # --------------------------------------------------------------------------
-# 4. SIDEBAR (CONTROLS & VISUAL MODE SWITCH)
+# 4. SIDEBAR (CONTROLS & HYPERPARAMETERS)
 # --------------------------------------------------------------------------
 with st.sidebar:
     st.header("Display & Hyperparameters")
