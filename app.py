@@ -261,18 +261,18 @@ with st.sidebar:
         "Confidence Threshold",
         min_value=0.01,
         max_value=1.00,
-        value=0.10,
+        value=0.25,
         step=0.01,
-        help="Lower values catch subtle lesions; higher values show only high-confidence predictions."
+        help="Matches Colab default (0.25). Higher values eliminate weak, noisy candidate boxes."
     )
     
     iou_threshold = st.slider(
         "IoU (NMS) Overlap Threshold",
         min_value=0.05,
         max_value=1.00,
-        value=0.70,
+        value=0.45,
         step=0.05,
-        help="Higher values allow overlapping neighboring leaves to be detected separately."
+        help="Lower values merge coinciding duplicate boxes on the same leaf."
     )
 
 # --------------------------------------------------------------------------
@@ -323,21 +323,23 @@ if uploaded_file is not None:
         ]
 
     with st.spinner("Analyzing leaf condition..."):
-        # Pass 1: Raw Detection
+        # Pass 1: Raw Detection with Class-Agnostic NMS enabled
         results_unconstrained = model.predict(
             source=pil_image,
             conf=conf_threshold,
             iou=iou_threshold,
+            agnostic_nms=True,
             save=False,
             verbose=False
         )
 
-        # Pass 2: Targeted Matching
+        # Pass 2: Targeted Matching with Class-Agnostic NMS enabled
         results_targeted = model.predict(
             source=pil_image,
             classes=allowed_class_ids,
             conf=0.001,
             iou=iou_threshold,
+            agnostic_nms=True,
             save=False,
             verbose=False
         )
