@@ -144,16 +144,49 @@ DEFAULT_FALLBACK_ADVISORY = {
     "cure": "Consult regional agricultural extension services for targeted treatment guidelines."
 }
 
+# Explicit Rule-Based Matcher: (crop_keys, disease_keys, directory_key)
+DISEASE_RULES = [
+    (["apple"], ["scab"], "apple scab"),
+    (["apple"], ["rust"], "apple rust"),
+    (["pepper", "bell"], ["spot"], "bell pepper leaf spot"),
+    (["corn"], ["gray"], "corn gray leaf spot"),
+    (["corn"], ["blight"], "corn leaf blight"),
+    (["corn"], ["rust"], "corn rust"),
+    (["potato"], ["early"], "potato leaf early blight"),
+    (["potato"], ["late"], "potato leaf late blight"),
+    (["squash"], ["mildew", "powdery"], "squash powdery mildew"),
+    (["tomato"], ["early"], "tomato early blight"),
+    (["tomato"], ["septoria"], "tomato septoria leaf spot"),
+    (["tomato"], ["bacterial"], "tomato leaf bacterial spot"),
+    (["tomato"], ["late"], "tomato leaf late blight"),
+    (["tomato"], ["mosaic"], "tomato leaf mosaic virus"),
+    (["tomato"], ["yellow"], "tomato leaf yellow virus"),
+    (["tomato"], ["mold"], "tomato mold leaf"),
+    (["tomato"], ["mite", "spider"], "tomato two-spotted spider mites"),
+    (["grape"], ["rot", "black"], "grape leaf black rot"),
+]
+
+ALL_DISEASE_TOKENS = {
+    "scab", "rust", "spot", "gray", "blight", "early", "late", 
+    "mildew", "powdery", "septoria", "bacterial", "mosaic", 
+    "yellow", "mold", "mite", "spider", "rot", "black"
+}
+
 def lookup_disease_advisory(label_text):
-    """Matches detected label with the disease directory."""
+    """Matches detected label with the disease directory using strict token rules."""
     cleaned = label_text.lower().replace("_", " ").replace("-", " ")
-    for key, data in DISEASE_DIRECTORY.items():
-        key_tokens = key.split()
-        if all(token in cleaned for token in key_tokens):
-            return data
-    for key, data in DISEASE_DIRECTORY.items():
-        if key in cleaned or any(tok in cleaned for tok in key.split() if len(tok) > 3):
-            return data
+
+    # 1. Match specific crop + disease combinations
+    for crop_tokens, disease_tokens, dict_key in DISEASE_RULES:
+        has_crop = any(c in cleaned for c in crop_tokens)
+        has_disease = any(d in cleaned for d in disease_tokens)
+        if has_crop and has_disease:
+            return DISEASE_DIRECTORY[dict_key]
+
+    # 2. Check if the leaf is healthy or baseline foliage
+    if "healthy" in cleaned or not any(d in cleaned for d in ALL_DISEASE_TOKENS):
+        return DISEASE_DIRECTORY["healthy"]
+
     return DEFAULT_FALLBACK_ADVISORY
 
 # --------------------------------------------------------------------------
@@ -317,7 +350,7 @@ if uploaded_file is not None:
         ]
 
     with st.spinner("Analyzing leaf condition..."):
-        # Pass 1: Unbiased, Unrestricted Guess Across All Crops
+        # Pass 1: Unbiased Scan Across All Crops
         results_unconstrained = model.predict(
             source=pil_image,
             conf=conf_threshold,
@@ -327,7 +360,7 @@ if uploaded_file is not None:
             verbose=False
         )
 
-        # Pass 2: Direct Crop-Restricted Prediction
+        # Pass 2: Direct Crop-Restricted Diagnosis
         results_targeted = model.predict(
             source=pil_image,
             classes=allowed_class_ids,
@@ -344,7 +377,7 @@ if uploaded_file is not None:
         unconstrained_boxes = results_unconstrained[0].boxes
         targeted_boxes = results_targeted[0].boxes
 
-        # Check for domain mismatch between Pass 1 and selected crop
+        # Check for domain mismatch
         mismatch_detected = False
         mismatched_crop_name = ""
         if not is_unrestricted and len(unconstrained_boxes) > 0:
@@ -357,7 +390,7 @@ if uploaded_file is not None:
                     mismatched_crop_name = clean_kw.title()
                     break
 
-        # Process Pass 1 Detections
+        # Pass 1 Summary
         raw_summary = []
         for idx, box in enumerate(unconstrained_boxes, start=1):
             u_xyxy = box.xyxy[0].cpu().numpy().astype(int)
@@ -372,7 +405,7 @@ if uploaded_file is not None:
                 "Confidence": f"{u_confidence:.1f}%"
             })
 
-        # Process Pass 2 Detections (Direct Target Crop Prediction)
+        # Pass 2 Summary
         filtered_summary = []
         detected_conditions = set()
         for idx, box in enumerate(targeted_boxes, start=1):
@@ -433,28 +466,33 @@ if uploaded_file is not None:
             st.info(f"No specific lesions detected within the {selected_option} domain.")
 
     # --------------------------------------------------------------------------
-    # 8. PATHOLOGY ADVISORY (IDENTIFY, PREVENT, CURE)
+    # 8. PATHOLOGY ADVISORY (DEDUPLICATED BY ADVISORY TITLE)
     # --------------------------------------------------------------------------
     advisory_targets = detected_conditions if detected_conditions else {r["Identified Condition"] for r in raw_summary}
 
     if advisory_targets:
         st.divider()
         st.subheader("Pathology Advisory & Remediation Directives")
-        
-        for condition in sorted(list(advisory_targets)):
+
+        # Map each label to its info profile and deduplicate by title
+        unique_advisories = {}
+        for condition in advisory_targets:
             info = lookup_disease_advisory(condition)
-            
-            with st.expander(f"Treatment Profile: {info['title']}", expanded=True):
+            unique_advisories[info["title"]] = info
+
+        # Render one card per unique disease
+        for title, info in sorted(unique_advisories.items()):
+            with st.expander(f"Treatment Profile: {title}", expanded=True):
                 col_id, col_prev, col_cure = st.columns(3)
-                
+
                 with col_id:
                     st.markdown("**How to Identify**")
                     st.write(info["identify"])
-                    
+
                 with col_prev:
                     st.markdown("**How to Prevent**")
                     st.write(info["prevent"])
-                    
+
                 with col_cure:
                     st.markdown("**How to Cure**")
                     st.write(info["cure"])
