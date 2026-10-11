@@ -181,14 +181,12 @@ def lookup_disease_advisory(label_text):
     """Matches detected label with the disease directory using strict token rules."""
     cleaned = label_text.lower().replace("_", " ").replace("-", " ")
 
-    # 1. Match specific crop + disease combinations
     for crop_tokens, disease_tokens, dict_key in DISEASE_RULES:
         has_crop = any(c in cleaned for c in crop_tokens)
         has_disease = any(d in cleaned for d in disease_tokens)
         if has_crop and has_disease:
             return DISEASE_DIRECTORY[dict_key]
 
-    # 2. Check if the leaf is healthy or baseline foliage
     if "healthy" in cleaned or not any(d in cleaned for d in ALL_DISEASE_TOKENS):
         return DISEASE_DIRECTORY["healthy"]
 
@@ -311,13 +309,12 @@ with st.sidebar:
 # 5. MAIN WORKSPACE: HEADER & STEP-BY-STEP WORKFLOW
 # --------------------------------------------------------------------------
 if LOGO_FILE:
-    _, col_logo, _ = st.columns([1.6, 1, 1.6])
+    _, col_logo, _ = st.columns([1.18, 1, 1.18])
     with col_logo:
         st.image(LOGO_FILE, use_container_width=True)
 
-st.markdown("<h1 style='text-align: center;'>Plant Guard ai</h1>", unsafe_allow_html=True)
 st.markdown(
-    "<p style='text-align: center; font-size: 1.1rem; color: gray;'>"
+    "<p style='text-align: center; font-size: 1.1rem; color: gray; margin-top: 5px;'>"
     "Crop & Disease Identification AI Advisor: Instantly recognize your plants, spot health issues, and get clear treatment advice."
     "</p>", 
     unsafe_allow_html=True
@@ -403,7 +400,6 @@ if uploaded_file is not None:
             selected_clean = user_specified_crop.replace("_", " ").title()
             other_crops = [c for c in pass1_crops if c != selected_clean]
 
-            # Trigger warning if another crop was identified and (selected crop is absent OR Pass 2 found 0 leaves)
             if other_crops and (selected_clean not in pass1_crops or len(targeted_boxes) == 0):
                 mismatch_detected = True
                 mismatched_crop_name = ", ".join(sorted(other_crops))
