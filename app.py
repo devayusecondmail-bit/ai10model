@@ -9,8 +9,13 @@ from ultralytics import YOLO
 # --------------------------------------------------------------------------
 # 1. PAGE SETUP & CONFIGURATION
 # --------------------------------------------------------------------------
+LOGO_FILE = "logo.png" if os.path.exists("logo.png") else (
+    "IMG-20261004-WA0004-removebg-preview.png" if os.path.exists("IMG-20261004-WA0004-removebg-preview.png") else None
+)
+
 st.set_page_config(
-    page_title="Ai10model - Plant Diagnostic System",
+    page_title="Plant Guard ai - Plant Diagnostic System",
+    page_icon=LOGO_FILE if LOGO_FILE else "🌿",
     layout="wide"
 )
 
@@ -305,7 +310,12 @@ with st.sidebar:
 # --------------------------------------------------------------------------
 # 5. MAIN WORKSPACE: HEADER & STEP-BY-STEP WORKFLOW
 # --------------------------------------------------------------------------
-st.markdown("<h1 style='text-align: center;'>Ai10model</h1>", unsafe_allow_html=True)
+if LOGO_FILE:
+    _, col_logo, _ = st.columns([1.6, 1, 1.6])
+    with col_logo:
+        st.image(LOGO_FILE, use_container_width=True)
+
+st.markdown("<h1 style='text-align: center;'>Plant Guard ai</h1>", unsafe_allow_html=True)
 st.markdown(
     "<p style='text-align: center; font-size: 1.1rem; color: gray;'>"
     "Crop & Disease Identification AI Advisor: Instantly recognize your plants, spot health issues, and get clear treatment advice."
@@ -485,13 +495,11 @@ if uploaded_file is not None:
         st.divider()
         st.subheader("Pathology Advisory & Remediation Directives")
 
-        # Map each label to its info profile and deduplicate by title
         unique_advisories = {}
         for condition in advisory_targets:
             info = lookup_disease_advisory(condition)
             unique_advisories[info["title"]] = info
 
-        # Render one card per unique disease
         for title, info in sorted(unique_advisories.items()):
             with st.expander(f"Treatment Profile: {title}", expanded=True):
                 col_id, col_prev, col_cure = st.columns(3)
